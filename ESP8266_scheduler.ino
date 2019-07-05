@@ -106,12 +106,12 @@ bool task_gpio_default[] = {LOW};
 
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
-char auth[] = "280fad034d5f402f8b359952ec5de364";
+char auth[] = "";
 
 // Your WiFi credentials.
 // Set password to "" for open networks.
-char ssid[] = "Rozin";
-char pass[] = "100419061410";
+char ssid[] = "User";
+char pass[] = "Pwd";
 
 const char* host = "esp8266_boiler";
 const char* update_path = "/firmware";
