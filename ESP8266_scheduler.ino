@@ -81,43 +81,29 @@
 // The following section contains code that should be changed 
 //  by user to match the exact system needs.
 ////////////////////////////////////////////////////////////
-//#define WIFI_LED 13
-#define WIFI_LED 5
+// place all passwords and tokens in the following file
+#include "passwd.h"
+
+#define WIFI_LED 13
+//#define WIFI_LED 5
 
 // define parameters for number of schedulers and number of timers
-#define SCHEDULER_CNT 1
+#define SCHEDULER_CNT 4
 #define TIME_CNT 4
 
-// This system uses gpio on of as tasks.
-// The number of used gpio per task is given by task_gpio_pins array
-//byte task_gpio_pins[] = {12 , 5 , 4 , 15}; // number of gpio to be used as task control
-//byte task_gpio_pins[] = {12}; // number of gpio to be used as task control
-byte task_gpio_pins[] = {2}; // number of gpio to be used as task control
+// Define GPIO inputs used for immidiate activation of schedulers
 //byte in_gpio_pins[] = {0}; // number of used as button to activate task from device 
-byte in_gpio_pins[] = {14}; // number of used as button to activate task from device 
+byte in_gpio_pins[] = {14,14,14,14}; // number of gpios used as button to activate scheduler from device 
 //byte in_gpio_polarity[] = {HIGH}; // polarity of each gpio pin (HIGH=Reverse) 
-byte in_gpio_polarity[] = {LOW}; // polarity of each gpio pin (HIGH=Reverse) 
-byte last_in_gpio_pins[] = {LOW}; // holds last status of gpio pin (used for creating toggle) 
+byte in_gpio_polarity[] = {LOW,LOW,LOW,LOW}; // polarity of each gpio pin (HIGH=Reverse) 
+byte last_in_gpio_pins[] = {LOW,LOW,LOW,LOW}; // holds last status of gpio pin (used for creating toggle) 
 
-// The default value of the gpio for task off is given by task_gpio_default.
-//  (used for gpio negative polarity)
-bool task_gpio_default[] = {LOW}; 
 
-#include "passwd.h"
-// You should get Auth Token in the Blynk App.
-// Go to the Project Settings (nut icon).
-//char auth[] = "";
 
-// Your WiFi credentials.
-// Set password to "" for open networks.
-//char ssid[] = "User";
-//char pass[] = "Pwd";
-
-const char* host = "esp8266_boiler";
+// define fimware update server
+// firmware update done through "http://esp8266_boiler.local/firmware"
+const char* host = "esp8266_boiler"; 
 const char* update_path = "/firmware";
-//const char* update_username = "WiFiSSID";
-//const char* update_password = "WiFiPWD";
-
 
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
@@ -128,10 +114,24 @@ ESP8266HTTPUpdateServer httpUpdater;
 // this is an abstraction layer for activating task
 // curently only simple activation of gpio but user can change this
 //////////////////////////////////////////////////////////////////////////////////
-void task_on_off(bool task_state, char scheduler_num){
+// This system uses gpio on of as tasks.
+// The number of used gpio per task is given by task_gpio_pins array
+//byte task_gpio_pins[] = {12 , 5 , 4 , 15}; // number of gpio to be used as task control
+//byte task_gpio_pins[] = {12}; // number of gpio to be used as task control
+byte task_gpio_pins[] = {2,5,13,15}; // number of gpio to be used as task control
+// The default value of the gpio for task off is given by task_gpio_default.
+//  (used for gpio negative polarity)
+bool task_gpio_default[] = {LOW,LOW,LOW,LOW}; 
+
+void SchedulerTask_OnOff(bool task_state, char scheduler_num){
   bool gpio_val = task_state^task_gpio_default[scheduler_num];
   digitalWrite(task_gpio_pins[scheduler_num],gpio_val);
 }
+
+void SchedulerTaskInit(char scheduler_num){
+    pinMode(task_gpio_pins[scheduler_num], OUTPUT);  // set output pins
+}
+
 ////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////
 // end system configuration section                                               //
@@ -209,8 +209,8 @@ int  disable_timer_id = 32;                    // when system is disabled a time
 int  system_disable_days_msec;                 // VP_DISBL_DAYS defines days to disable the system (including today) given in msec
 
 // timer object declaration
-BlynkTimer timer;                              // for turning off schedulers at end time
-BlynkTimer SystemTimer;                        // for calling activetoday and for turning off sleep/disable modes
+BlynkTimer SystemTimer;                              // for turning off schedulers at end time
+BlynkTimer SchedulerTimer;                        // for calling activetoday and for turning off sleep/disable modes
 
 // this code use Real Time Clock widget in the blynk app to keep the clock updated from net
 WidgetRTC rtc;
@@ -230,7 +230,7 @@ void sleep_disable_mode_off()
    system_sleep_mode = false;       
    // iterate over all schedulers and reactivate tasks if needed.
    for (int scheduler_cnt = 0;  scheduler_cnt< SCHEDULER_CNT; scheduler_cnt++) 
-      if(scheduler_state[scheduler_cnt]) task_on_off(HIGH, scheduler_cnt); 
+      if(scheduler_state[scheduler_cnt]) SchedulerTask_OnOff(HIGH, scheduler_cnt); 
 
    // enable main timer (only if in disable mode)    
    SystemTimer.enable(main_timer_id);  
@@ -239,7 +239,7 @@ void sleep_disable_mode_off()
    Blynk.virtualWrite(VP_SLEEP_SYS,0);
 
    // set disable timer id to 32 to prevent disabling system timer by mistake
-   SystemTimer.deleteTimer(disable_timer_id);
+   SchedulerTimer.deleteTimer(disable_timer_id);
    disable_timer_id = 32;
 }
 //////////////////////////////////////////////////////////////////////////////////
@@ -281,8 +281,8 @@ BLYNK_WRITE_DEFAULT() {
           scheduler_turn_off((void*) &scheduler_num_array[scheduler_cnt]);
  
       // create a timer to wake the system up after system_disable_days_msec are over
-      SystemTimer.deleteTimer(disable_timer_id); // make sure no disable timer is active
-      disable_timer_id = SystemTimer.setTimeout(system_disable_days_msec-nowmseconds,sleep_disable_mode_off);
+      SchedulerTimer.deleteTimer(disable_timer_id); // make sure no disable timer is active
+      disable_timer_id = SchedulerTimer.setTimeout(system_disable_days_msec-nowmseconds,sleep_disable_mode_off);
  
       // print current data on VP_DISBL_SYS button
       Blynk.setProperty(VP_DISBL_SYS, "onLabel", currentDate);
@@ -301,11 +301,11 @@ BLYNK_WRITE_DEFAULT() {
           system_sleep_mode = true;
           // turn off all tasks (do not disable the schedulers )
           for (int task_cnt = 0;  task_cnt< SCHEDULER_CNT; task_cnt++) 
-            task_on_off(LOW, task_cnt);
+            SchedulerTask_OnOff(LOW, task_cnt);
             
           // create a timer to wake the system up after system_disable_days_msec are over
-          SystemTimer.deleteTimer(disable_timer_id); // make sure no disable timer is active
-          disable_timer_id = SystemTimer.setTimeout(system_disable_days_msec-nowmseconds,sleep_disable_mode_off);
+          SchedulerTimer.deleteTimer(disable_timer_id); // make sure no disable timer is active
+          disable_timer_id = SchedulerTimer.setTimeout(system_disable_days_msec-nowmseconds,sleep_disable_mode_off);
           // print current data on VP_SLEEP_SYS button
           Blynk.setProperty(VP_SLEEP_SYS, "onLabel", currentDate);
       
@@ -404,10 +404,10 @@ void scheduler_turn_on(byte scheduler_num , byte time_no){
      // save scheduler state (in case of system sleep)
      scheduler_state[scheduler_num] = true; 
     // turn on the task 
-    if (!system_sleep_mode) task_on_off(HIGH, scheduler_num);
+    if (!system_sleep_mode) SchedulerTask_OnOff(HIGH, scheduler_num);
     
     // if new timer is set before another one ended then disable previous timer
-    if (end_timer_id[scheduler_num]!=32) timer.deleteTimer(end_timer_id[scheduler_num]);
+    if (end_timer_id[scheduler_num]!=32) SystemTimer.deleteTimer(end_timer_id[scheduler_num]);
     
     // calculate activation duration for this call of scheduler_turn_on
     int curr_active_duration_sec ;
@@ -429,9 +429,10 @@ void scheduler_turn_on(byte scheduler_num , byte time_no){
     Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_num,1);
 
     // set timer to turn off scheduler 
-    // the scheduler number is passed as a void pointer. It must be pointing to a static/global value hance the scheduler_num_array
+    // the callback function scheduler_turn_off needs scheduler number.
+    //  the scheduler number is passed as a void pointer. It must be pointing to a static/global value hance the scheduler_num_array
     if (curr_active_duration_sec != 0) {
-      end_timer_id[scheduler_num]=timer.setTimeout(curr_active_duration_sec*1000, scheduler_turn_off, (void*) &scheduler_num_array[scheduler_num]);
+      end_timer_id[scheduler_num]=SystemTimer.setTimeout(curr_active_duration_sec*1000, scheduler_turn_off, (void*) &scheduler_num_array[scheduler_num]);
  
       Serial.println(String("turn ON scheduler: ") + scheduler_num + String(" for duration: ") + curr_active_duration_sec + String("sec "));
     }
@@ -446,10 +447,10 @@ void scheduler_turn_off(void* scheduler_num ){
 
     scheduler_state[scheduler_num_tmp] = false; 
     // set task off
-    task_on_off(LOW, scheduler_num_tmp);
+    SchedulerTask_OnOff(LOW, scheduler_num_tmp);
 
     // delete associated timer
-    timer.deleteTimer(end_timer_id[scheduler_num_tmp]);
+    SystemTimer.deleteTimer(end_timer_id[scheduler_num_tmp]);
     end_timer_id[scheduler_num_tmp]=32;
     Serial.println(String("turn OFF scheduler: ") + scheduler_num_tmp);
 
@@ -505,9 +506,14 @@ void activetoday(){         // check if schedule #1 should run today
   }   
 }
 
-
-/////////////////////////////////////
-// gpio to virtual pin 
+/////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//// GPIO Immidiate Activation                                                               ////
+////  The following function is used to bind GPIO into immidiate activation.                 ////
+////  It pools on the given GPIOs (one per scheduler)                                        ////
+////    and if set will cause immidiate activation of the scheduler                          ////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////
 void gpio_to_virtualpin() {
      int gpio_state;
      for (int scheduler_cnt = 0;  scheduler_cnt< SCHEDULER_CNT; scheduler_cnt++) {
@@ -517,10 +523,10 @@ void gpio_to_virtualpin() {
               Serial.println(String("scheduler_state==: ") + scheduler_state[scheduler_cnt]);
               if (scheduler_state[scheduler_cnt]){
                 Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_cnt,0);
-                  Serial.println("Switch OFF \n"); }
+                Serial.println("Switch OFF \n"); }
               else {
                 Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_cnt,1);
-                  Serial.println("Switch ON \n"); }
+                Serial.println("Switch ON \n"); }
                   
               Blynk.syncVirtual(VP_IMMD_ACTV_SCHD0+scheduler_cnt);
             }
@@ -528,11 +534,8 @@ void gpio_to_virtualpin() {
        }
        else
          last_in_gpio_pins[scheduler_cnt]=LOW;
-       
     }
-  
 }
-
 
 /////////////////////////////////////
 // BLYNK 
@@ -543,10 +546,12 @@ void setup() {
 
   // reset output pins used and system variables
   for (int i = 0; i<SCHEDULER_CNT ; i++){
+//    SchedulerTaskInit(i);
     pinMode(task_gpio_pins[i], OUTPUT);  // set output pins
+
     pinMode(in_gpio_pins[i], INPUT);
 
-    task_on_off(LOW,i );                 // turn tasks off
+    SchedulerTask_OnOff(LOW,i );                 // turn tasks off
     end_timer_id[i] = 32;                // reset end timer id's
     scheduler_num_array[i] = i;          // initialize scheduler number array 
     scheduler_state[i] = false;
@@ -579,16 +584,19 @@ void setup() {
   // using 55 sec ensures that active today will visit every minuet even if 
   //   RTC gets time update of up to 5 sec (unreasonable big change) from the web
   main_timer_id = SystemTimer.setInterval(58000L, activetoday);  
+
+  // check GPIOs every 100msec
+  SystemTimer.setInterval(100L,gpio_to_virtualpin);
+
+  // Blynk sync
   setSyncInterval(10 * 60); // Sync interval in seconds (10 minutes)
 
- 
 }
 
 void loop() {
   Blynk.run();
-  timer.run();
   SystemTimer.run();
+  SchedulerTimer.run();
   httpServer.handleClient();
-  gpio_to_virtualpin();
  
 }
