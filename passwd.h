@@ -5,7 +5,7 @@ char auth[] = "";
 
 // Your WiFi credentials.
 // Set password to "" for open networks.
-char ssid[] = "User";
+char ssid[] = "SSID";
 char pass[] = "Pwd";
-const char* update_username = "WiFiSSID";
-const char* update_password = "WiFiPWD";
+const char* update_username = "firmware user name";
+const char* update_password = "firmware password";
