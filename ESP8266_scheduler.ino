@@ -103,20 +103,20 @@ byte last_in_gpio_pins[] = {LOW}; // holds last status of gpio pin (used for cre
 //  (used for gpio negative polarity)
 bool task_gpio_default[] = {LOW}; 
 
-
+#include "passwd.h"
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
-char auth[] = "";
+//char auth[] = "";
 
 // Your WiFi credentials.
 // Set password to "" for open networks.
-char ssid[] = "User";
-char pass[] = "Pwd";
+//char ssid[] = "User";
+//char pass[] = "Pwd";
 
 const char* host = "esp8266_boiler";
 const char* update_path = "/firmware";
-const char* update_username = "Hagay";
-const char* update_password = "Rozin1105";
+//const char* update_username = "WiFiSSID";
+//const char* update_password = "WiFiPWD";
 
 
 ESP8266WebServer httpServer(80);
