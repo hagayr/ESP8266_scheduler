@@ -68,13 +68,34 @@
 
 #include <ESP8266WiFi.h>
 
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
+//#include <ESP8266WebServer.h>
+//#include <ESP8266mDNS.h>
 #include <ESP8266HTTPUpdateServer.h>
+#include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
+
+//#include <ArduinoOTA.h>
+
+#include <EEPROM.h>
+
+#define EEPROM_SALT 12667
+typedef struct {
+  char  bootState[4]      = "off";
+  char  blynkToken[33]    = "";
+  char  blynkServer[33]   = "blynk-cloud.com";
+  char  blynkPort[6]      = "8442";
+
+  int   salt              = EEPROM_SALT;
+} WMSettings;
+
+WMSettings settings;
 
 #include <BlynkSimpleEsp8266.h>
 #include <TimeLib.h>
 #include <WidgetRTC.h>
+
+
+
+
 
 /////////////////////////////////////////////////////////////
 // system configuration section
@@ -84,8 +105,11 @@
 // place all passwords and tokens in the following file
 #include "passwd.h"
 
-#define WIFI_LED 13
+#define WIFI_LED 16
 //#define WIFI_LED 5
+
+#define RESET_PIN 14
+#define RESET_PIN_POLARITY LOW
 
 // define parameters for number of schedulers and number of timers
 #define SCHEDULER_CNT 4
@@ -98,7 +122,7 @@ byte in_gpio_pins[] = {14,14,14,14}; // number of gpios used as button to activa
 byte in_gpio_polarity[] = {LOW,LOW,LOW,LOW}; // polarity of each gpio pin (HIGH=Reverse) 
 byte last_in_gpio_pins[] = {LOW,LOW,LOW,LOW}; // holds last status of gpio pin (used for creating toggle) 
 
-
+int ResetCounter = 0;
 
 // define fimware update server
 // firmware update done through "http://esp8266_boiler.local/firmware"
@@ -108,6 +132,7 @@ const char* update_path = "/firmware";
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
 
+//#define HOSTNAME "sonoff"
 
 //////////////////////////////////////////////////////////////////////////////////
 // task activation fuction
@@ -137,6 +162,37 @@ void SchedulerTaskInit(char scheduler_num){
 // end system configuration section                                               //
 ////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////
+
+//for LED status
+#include <Ticker.h>
+Ticker ticker;
+
+
+void tick()
+{
+  //toggle state
+  int state = digitalRead(WIFI_LED);  // get the current state of GPIO1 pin
+  digitalWrite(WIFI_LED, !state);     // set pin to the opposite state
+}
+
+void configModeCallback (WiFiManager *myWiFiManager) {
+  Serial.println("Entered config mode");
+  Serial.println(WiFi.softAPIP());
+  //if you used auto generated SSID, print it
+  Serial.println(myWiFiManager->getConfigPortalSSID());
+  //entered config mode, make led toggle faster
+  ticker.attach(0.2, tick);
+}
+
+
+//flag for saving data
+bool shouldSaveConfig = false;
+
+//callback notifying us of the need to save config
+void saveConfigCallback () {
+  Serial.println("Should save config");
+  shouldSaveConfig = true;
+}
 
 //////////////////////////////////////////////////////////////////////////////////
 // The following defines will automaticaly assign virtual pins                  //
@@ -514,28 +570,79 @@ void activetoday(){         // check if schedule #1 should run today
 ////    and if set will cause immidiate activation of the scheduler                          ////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
+//void gpio_to_virtualpin() {
+//     int gpio_state;
+//     for (int scheduler_cnt = 0;  scheduler_cnt< SCHEDULER_CNT; scheduler_cnt++) {
+//       if (digitalRead(in_gpio_pins[scheduler_cnt])==!in_gpio_polarity[scheduler_cnt]) {
+          
+//            if (last_in_gpio_pins[scheduler_cnt]==LOW){
+//              Serial.println(String("scheduler_state==: ") + scheduler_state[scheduler_cnt]);
+//              if (scheduler_state[scheduler_cnt]){
+//                Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_cnt,0);
+//                Serial.println("Switch OFF \n"); }
+//              else {
+//                Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_cnt,1);
+//                Serial.println("Switch ON \n"); }
+                  
+//              Blynk.syncVirtual(VP_IMMD_ACTV_SCHD0+scheduler_cnt);
+//            }
+//            last_in_gpio_pins[scheduler_cnt]=HIGH;
+//       }
+//       else
+//         last_in_gpio_pins[scheduler_cnt]=LOW;
+//    }
+//}
+
 void gpio_to_virtualpin() {
      int gpio_state;
      for (int scheduler_cnt = 0;  scheduler_cnt< SCHEDULER_CNT; scheduler_cnt++) {
        if (digitalRead(in_gpio_pins[scheduler_cnt])==!in_gpio_polarity[scheduler_cnt]) {
-          
-            if (last_in_gpio_pins[scheduler_cnt]==LOW){
-              Serial.println(String("scheduler_state==: ") + scheduler_state[scheduler_cnt]);
-              if (scheduler_state[scheduler_cnt]){
+        last_in_gpio_pins[scheduler_cnt]+=1;
+       }
+       else {
+
+          if (last_in_gpio_pins[scheduler_cnt]!=0) {
+          // toggle Virtual pin
+
+            Serial.println(String("scheduler_state==: ") + scheduler_state[scheduler_cnt]);
+            if (scheduler_state[scheduler_cnt]){
                 Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_cnt,0);
                 Serial.println("Switch OFF \n"); }
-              else {
+            else {
                 Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_cnt,1);
                 Serial.println("Switch ON \n"); }
                   
-              Blynk.syncVirtual(VP_IMMD_ACTV_SCHD0+scheduler_cnt);
-            }
-            last_in_gpio_pins[scheduler_cnt]=HIGH;
+            Blynk.syncVirtual(VP_IMMD_ACTV_SCHD0+scheduler_cnt);
+
+          
+          }
+ 
+          last_in_gpio_pins[scheduler_cnt]=0;
+                
+       }
+       
+     }
+
+       if (digitalRead(RESET_PIN)!=RESET_PIN_POLARITY) {
+        ResetCounter+=1;
+        if (ResetCounter>100) {
+              WMSettings defaults;
+              settings = defaults;
+              EEPROM.begin(512);
+              EEPROM.put(0, settings);
+              EEPROM.end();
+              WiFi.disconnect();
+              delay(1000);
+              ESP.reset();
+              delay(1000);
+        }
        }
        else
-         last_in_gpio_pins[scheduler_cnt]=LOW;
-    }
+        ResetCounter=0;
+
+     
 }
+
 
 /////////////////////////////////////
 // BLYNK 
@@ -543,7 +650,7 @@ void setup() {
   // Debug console
   Serial.begin(115200);  
 
-
+ 
   // reset output pins used and system variables
   for (int i = 0; i<SCHEDULER_CNT ; i++){
 //    SchedulerTaskInit(i);
@@ -564,21 +671,122 @@ void setup() {
     active_duration_sec[i][TIME_CNT] = 0; // this is the duration from the slider
   }
   
-  pinMode(WIFI_LED, OUTPUT);
   
 
+
+
+  //set led pin as output
+  pinMode(WIFI_LED, OUTPUT);
+  // start ticker with 0.5 because we start in AP mode and try to connect
+  ticker.attach(0.6, tick);
+// const char *hostname = HOSTNAME;
+  //WiFiManager
+  //Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wifiManager;
+//  wifiManager.resetSettings();
+
+
+  //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
+  wifiManager.setAPCallback(configModeCallback);
+
+  //timeout - this will quit WiFiManager if it's not configured in 3 minutes, causing a restart
+  wifiManager.setConfigPortalTimeout(180);
+
+  //custom params
+  EEPROM.begin(512);
+  EEPROM.get(0, settings);
+  EEPROM.end();
+
+  if (settings.salt != EEPROM_SALT) {
+    Serial.println("Invalid settings in EEPROM, trying with defaults");
+    WMSettings defaults;
+    settings = defaults;
+}
+
+
+//  WiFiManagerParameter custom_boot_state("boot-state", "on/off on boot", settings.bootState, 33);
+//  wifiManager.addParameter(&custom_boot_state);
+
+
+  Serial.println(settings.bootState);
+
+
+  Serial.println(settings.blynkToken);
+  Serial.println(settings.blynkServer);
+  Serial.println(settings.blynkPort);
+
+  WiFiManagerParameter custom_blynk_text("<br/>Blynk config. <br/> No token to disable.<br/>");
+  wifiManager.addParameter(&custom_blynk_text);
+
+  WiFiManagerParameter custom_blynk_token("blynk-token", "blynk token", settings.blynkToken, 33);
+  wifiManager.addParameter(&custom_blynk_token);
+
+  WiFiManagerParameter custom_blynk_server("blynk-server", "blynk server", settings.blynkServer, 33);
+  wifiManager.addParameter(&custom_blynk_server);
+
+  WiFiManagerParameter custom_blynk_port("blynk-port", "port", settings.blynkPort, 6);
+  wifiManager.addParameter(&custom_blynk_port);
+
+
+  //set config save notify callback
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+ 
+
+
+
+   if (!wifiManager.autoConnect("AutoConnectAP")) {
+    Serial.println("failed to connect, we should reset as see if it connects");
+    delay(3000);
+    ESP.reset();
+    delay(5000);
+} 
+
+
+  //Serial.println(custom_blynk_token.getValue());
+  //save the custom parameters to FS
+  if (shouldSaveConfig) {
+    Serial.println("Saving config");
+
+//    strcpy(settings.bootState, custom_boot_state.getValue());
+
+    strcpy(settings.blynkToken, custom_blynk_token.getValue());
+    strcpy(settings.blynkServer, custom_blynk_server.getValue());
+    strcpy(settings.blynkPort, custom_blynk_port.getValue());
+
+
+
+    Serial.println(settings.bootState);
+    Serial.println(settings.blynkToken);
+    Serial.println(settings.blynkServer);
+    Serial.println(settings.blynkPort);
+
+    EEPROM.begin(512);
+    EEPROM.put(0, settings);
+    EEPROM.end();
+}
+ 
+
+  //if you get here you have connected to the WiFi
+  Serial.println("connected...yeey :)");
+  ticker.detach();
+
   WiFi.hostname(host);
-  Blynk.begin(auth, ssid, pass);
-
-  Serial.printf("Blynk_begin \n");
-
-  MDNS.begin(host);
 
   httpUpdater.setup(&httpServer, update_path, update_username, update_password);
+ 
   httpServer.begin();
 
-  MDNS.addService("http", "tcp", 80);
   Serial.printf("HTTPUpdateServer ready! Open http://%s.local%s in your browser and login with username '%s' and password '%s'\n", host, update_path, update_username, update_password);
+
+
+
+//  Blynk.begin(auth, ssid, pass);
+  Blynk.config(settings.blynkToken, settings.blynkServer, atoi(settings.blynkPort));
+  Blynk.connect();
+  
+  Serial.printf("Blynk_begin \n");
+
+
   
   // active today is called every 55 secondes to check if start time was reached
   // using 55 sec ensures that active today will visit every minuet even if 
