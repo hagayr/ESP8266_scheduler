@@ -73,50 +73,16 @@
 #include <BlynkSimpleEsp8266.h>
 #include <TimeLib.h>
 #include <WidgetRTC.h>
-
-
-
 #include "AutoConn.h"
-
-
 
 /////////////////////////////////////////////////////////////
 // system configuration section
-// The following section contains code that should be changed 
-//  by user to match the exact system needs.
+// The DeviceDefines.h should be changed by the user to define GPIOs of device and number of schedulers
+// The passwd.h should be chenged to define OTA user name and password
 ////////////////////////////////////////////////////////////
 // place all passwords and tokens in the following file
 #include "passwd.h"
-
-#define WIFI_LED 16
-//#define WIFI_LED 5
-
-
-#define RESET_PIN 14
-#define RESET_PIN_POLARITY LOW
-
-// define parameters for number of schedulers and number of timers
-#define SCHEDULER_CNT 4
-#define TIME_CNT 4
-
-// Define GPIO inputs used for immidiate activation of schedulers
-//byte in_gpio_pins[] = {0}; // number of used as button to activate task from device 
-byte in_gpio_pins[] = {14,24,24,24}; // number of gpios used as button to activate scheduler from device 
-//byte in_gpio_polarity[] = {HIGH}; // polarity of each gpio pin (HIGH=Reverse) 
-byte in_gpio_polarity[] = {LOW,LOW,LOW,LOW}; // polarity of each gpio pin (HIGH=Reverse) 
-bool gpio_pin_set[] = {false,false,false,false}; // counts the time the gpio is set 
-
-int ResetCounter = 0;
-
-// define fimware update server
-// firmware update done through "http://esp8266_boiler.local/firmware"
-const char* host = "esp8266_boiler"; 
-const char* update_path = "/firmware";
-
-ESP8266WebServer httpServer(80);
-ESP8266HTTPUpdateServer httpUpdater;
-
-//#define HOSTNAME "sonoff"
+#include "DeviceDefines.h"
 
 //////////////////////////////////////////////////////////////////////////////////
 // task activation fuction
@@ -127,10 +93,7 @@ ESP8266HTTPUpdateServer httpUpdater;
 // The number of used gpio per task is given by task_gpio_pins array
 //byte task_gpio_pins[] = {12 , 5 , 4 , 15}; // number of gpio to be used as task control
 //byte task_gpio_pins[] = {12}; // number of gpio to be used as task control
-byte task_gpio_pins[] = {2,5,13,15}; // number of gpio to be used as task control
-// The default value of the gpio for task off is given by task_gpio_default.
-//  (used for gpio negative polarity)
-bool task_gpio_default[] = {LOW,LOW,LOW,LOW}; 
+
 
 void SchedulerTask_OnOff(bool task_state, char scheduler_num){
   bool gpio_val = task_state^task_gpio_default[scheduler_num];
@@ -482,9 +445,9 @@ void activetoday(){         // check if schedule #1 should run today
 
   // set wifi led if no connection
   if(Blynk.connected()) 
-    digitalWrite(WIFI_LED,LOW);
+    digitalWrite(WIFI_LED,WIFI_LED_DEFAULT);
   else
-    digitalWrite(WIFI_LED,HIGH);
+    digitalWrite(WIFI_LED,!WIFI_LED_DEFAULT);
   
   int now_min = minute()+hour()*60;
   Serial.println(String("activetoday at: ") + now_min);
@@ -527,6 +490,7 @@ void activetoday(){         // check if schedule #1 should run today
 ////      and after 10 sec will activate a reset.                                            //// 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
+int ResetCounter = 0;
 
 void gpio_to_virtualpin() {
   
@@ -575,6 +539,11 @@ void gpio_to_virtualpin() {
 }
 /////////////////////////////////////
 // BLYNK 
+
+
+ESP8266WebServer httpServer(80);
+ESP8266HTTPUpdateServer httpUpdater;
+
 void setup() {
   // Debug console
   Serial.begin(115200);  

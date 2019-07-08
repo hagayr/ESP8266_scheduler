@@ -1,12 +1,13 @@
 
-
+// connect tiker with WIFI led
 void tick()
 {
   //toggle state
-  int state = digitalRead(WIFI_LED);  // get the current state of GPIO1 pin
+  int state = digitalRead(WIFI_LED);  // get the current state of GPIO pin
   digitalWrite(WIFI_LED, !state);     // set pin to the opposite state
 }
 
+// the following function is executed when wifi manager enters config mode
 void configModeCallback (WiFiManager *myWiFiManager) {
   Serial.println("Entered config mode");
   Serial.println(WiFi.softAPIP());
@@ -22,13 +23,15 @@ void saveConfigCallback () {
   shouldSaveConfig = true;
 }
 
-
+// the following function is called at setup
+// it calles the wifimanager and implements the autoconnect
 void AutoConnSetup() {
   //set led pin as output
   pinMode(WIFI_LED, OUTPUT);
+
   // start ticker with 0.5 because we start in AP mode and try to connect
   ticker.attach(0.6, tick);
-// const char *hostname = HOSTNAME;
+
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
@@ -70,20 +73,17 @@ void AutoConnSetup() {
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
  
-
-
-
-   if (!wifiManager.autoConnect("AutoConnectAP")) {
+  if (!wifiManager.autoConnect("AutoConnectAP")) {
     Serial.println("failed to connect, we should reset as see if it connects");
     delay(3000);
     ESP.reset();
     delay(5000);
-   } 
+  } 
 
 
-   //Serial.println(custom_blynk_token.getValue());
-   //save the custom parameters to FS
-   if (shouldSaveConfig) {
+  //Serial.println(custom_blynk_token.getValue());
+  //save the custom parameters to FS
+  if (shouldSaveConfig) {
      Serial.println("Saving config");
      strcpy(settings.blynkToken, custom_blynk_token.getValue());
      strcpy(settings.blynkServer, custom_blynk_server.getValue());
@@ -96,14 +96,17 @@ void AutoConnSetup() {
      EEPROM.begin(512);
      EEPROM.put(0, settings);
      EEPROM.end();
-   }
+  }
  
 
-   //if you get here you have connected to the WiFi
-   Serial.println("connected...yeey :)");
-   ticker.detach();  
+  //if you get here you have connected to the WiFi
+  Serial.println("connected...yeey :)");
+  ticker.detach();  
+  digitalWrite(WIFI_LED,WIFI_LED_DEFAULT);
 }
 
+// AutoConnRst is called by the application (when button pressed for 10 sec)
+// the old settings are removed and the device reset
 void AutoConnRst() {
    WMSettings defaults;
    settings = defaults;
