@@ -146,6 +146,7 @@ void SchedulerTaskInit(char scheduler_num){
 #define VP_SLEEP_SYS (VP_MAX_DUR_SCHD0+SCHEDULER_CNT+3)
 #define VP_DISBL_SYS (VP_MAX_DUR_SCHD0+SCHEDULER_CNT+4)
 #define VP_DISBL_DAYS (VP_DISBL_SYS+1)
+#define VP_END_TIME_SCHD0 (VP_DISBL_DAYS+1)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // time input arrays
@@ -191,7 +192,16 @@ WidgetRTC rtc;
 BLYNK_CONNECTED() {
   // Synchronize time on connection
   rtc.begin();
-  Blynk.syncAll();
+  
+  for (int i = 0; i<TIME_CNT*SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_SWCH0_TIME0+i);
+  for (int i = 0; i<SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_ACTV_DUR_SCHD0+i);
+  for (int i = 0; i<SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_MAX_DUR_SCHD0+i);
+  Blynk.syncVirtual(VP_SLEEP_SYS);
+  Blynk.syncVirtual(VP_DISBL_SYS);
+  Blynk.syncVirtual(VP_DISBL_DAYS);
+  for (int i = 0; i<SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_END_TIME_SCHD0+i);
+ 
+ // Blynk.syncAll();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -233,11 +243,31 @@ BLYNK_WRITE_DEFAULT() {
        nowmseconds = ((hour() * 3600) + (minute() * 60) + second())*1000;
 
   String currentDate = String(day()) + "\\" + month() + "\\" + year();
-      
+
+  if (pin >= VP_END_TIME_SCHD0) {
+    if (param.asInt()>0){
+
+       // save scheduler state (in case of system sleep)
+       scheduler_state[pin-VP_END_TIME_SCHD0] = true; 
+      // turn on the task 
+      if (!system_sleep_mode) SchedulerTask_OnOff(HIGH, pin-VP_END_TIME_SCHD0);
+    
+      // if new timer is set before another one ended then disable previous timer
+      if (end_timer_id[pin-VP_END_TIME_SCHD0]!=32) SystemTimer.deleteTimer(end_timer_id[pin-VP_END_TIME_SCHD0]);
+    
+      // calculate activation duration for this call of scheduler_turn_on
+      int curr_active_duration_sec =param.asInt() - hour()*3600 - minute()*60;
+      if (curr_active_duration_sec >= 24*3600) curr_active_duration_sec-=24*3600;
+      if (curr_active_duration_sec > 0) {
+        end_timer_id[pin-VP_END_TIME_SCHD0]=SystemTimer.setTimeout(curr_active_duration_sec*1000, scheduler_turn_off, (void*) &scheduler_num_array[pin-VP_END_TIME_SCHD0]);
+      }
+    }
+  }
+
   ///////////////////////////////////////////////////////////////////////
   // DISABLE DAYS SLIDER INPUT                                         //
   ///////////////////////////////////////////////////////////////////////
-  if (pin == VP_DISBL_DAYS) system_disable_days_msec = param.asInt()*86400000; // V33
+  else if (pin == VP_DISBL_DAYS) system_disable_days_msec = param.asInt()*86400000; // V33
   ///////////////////////////////////////////////////////////////////////
   // SYSTEM DISABLE BUTTON INPUT                                       //
   ///////////////////////////////////////////////////////////////////////
@@ -300,7 +330,7 @@ BLYNK_WRITE_DEFAULT() {
     if ( pin <(VP_IMMD_ACTV_SCHD0+SCHEDULER_CNT) ) {
       if (param.asInt()==0)
         scheduler_turn_off((void*) &scheduler_num_array[pin-VP_IMMD_ACTV_SCHD0]);
-      else
+      else 
         scheduler_turn_on(pin-VP_IMMD_ACTV_SCHD0,TIME_CNT);
     }
   }
@@ -401,6 +431,11 @@ void scheduler_turn_on(byte scheduler_num , byte time_no){
     Blynk.setProperty(VP_IMMD_ACTV_SCHD0+scheduler_num, "onLabel", String(Time_print));
     Blynk.virtualWrite(VP_IMMD_ACTV_SCHD0+scheduler_num,1);
 
+
+    Blynk.virtualWrite(VP_END_TIME_SCHD0+scheduler_num,curr_active_duration_sec+hour()*3600+minute()*60);
+
+
+
     // set timer to turn off scheduler 
     // the callback function scheduler_turn_off needs scheduler number.
     //  the scheduler number is passed as a void pointer. It must be pointing to a static/global value hance the scheduler_num_array
@@ -427,8 +462,11 @@ void scheduler_turn_off(void* scheduler_num ){
     end_timer_id[scheduler_num_tmp]=32;
     Serial.println(String("turn OFF scheduler: ") + scheduler_num_tmp);
 
-      // reset button
+    // reset button
+    Blynk.setProperty(scheduler_num_tmp + VP_IMMD_ACTV_SCHD0, "onLabel", "ON");
     Blynk.virtualWrite(scheduler_num_tmp + VP_IMMD_ACTV_SCHD0,0); 
+    Blynk.virtualWrite(VP_END_TIME_SCHD0+scheduler_num_tmp,-1);
+
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
