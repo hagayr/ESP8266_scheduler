@@ -123,10 +123,13 @@ void SchedulerTaskInit(char scheduler_num){
 //  Pin ( SCHEDULER_CNT*(TIME_CNT+3) ) +4 used for system disable button        //
 //  Pin ( SCHEDULER_CNT*(TIME_CNT+3) ) +5 used for slider of number of days     //
 //    to disable system                                                         //
+//  The following SCHEDULER_CNT pins are used to save the end time of active    //
+//    schedulers. these pins should not be used in the application.             //
+//    They are used in case of wifi connection lost or hard reset.              //
 // User must ensure that number of used Virtual pins will not exceed 127        //
 //  So the following rule must be kept when selecting SCHEDULER_CNT and TIME_CNT//
 //                                                                              //
-//                SCHEDULER_CNT*(TIME_CNT+3) < 123                              //
+//                SCHEDULER_CNT*(TIME_CNT+4) < 123                              //
 //                                                                              //
 // Also SCHEDULER_CNT must be smaller or equal to 16                            //               
 //////////////////////////////////////////////////////////////////////////////////
@@ -193,6 +196,8 @@ BLYNK_CONNECTED() {
   // Synchronize time on connection
   rtc.begin();
   
+  // The immidiate activation should not be sync when connecting
+  //  instead we use the VP_END_TIME_SCHD0 to save what ever previous end times there ware
   for (int i = 0; i<TIME_CNT*SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_SWCH0_TIME0+i);
   for (int i = 0; i<SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_ACTV_DUR_SCHD0+i);
   for (int i = 0; i<SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_MAX_DUR_SCHD0+i);
@@ -201,7 +206,6 @@ BLYNK_CONNECTED() {
   Blynk.syncVirtual(VP_DISBL_DAYS);
   for (int i = 0; i<SCHEDULER_CNT ; i++) Blynk.syncVirtual(VP_END_TIME_SCHD0+i);
  
- // Blynk.syncAll();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -244,9 +248,12 @@ BLYNK_WRITE_DEFAULT() {
 
   String currentDate = String(day()) + "\\" + month() + "\\" + year();
 
+  ///////////////////////////////////////////////////////////////////////
+  // END TIME FROM ACTIVATION BEFOR WIFI DISCONNECT or HARD RESET      //
+  ///////////////////////////////////////////////////////////////////////    
   if (pin >= VP_END_TIME_SCHD0) {
+    // if VP value is not -1 then the scheduler was active befor the reset
     if (param.asInt()>0){
-
        // save scheduler state (in case of system sleep)
        scheduler_state[pin-VP_END_TIME_SCHD0] = true; 
       // turn on the task 
