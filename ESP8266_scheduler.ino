@@ -446,8 +446,10 @@ void activetoday(){         // check if schedule #1 should run today
   // set wifi led if no connection
   if(Blynk.connected()) 
     digitalWrite(WIFI_LED,WIFI_LED_DEFAULT);
-  else
+  else {
     digitalWrite(WIFI_LED,!WIFI_LED_DEFAULT);
+    WiFi.begin();
+  }
   
   int now_min = minute()+hour()*60;
   Serial.println(String("activetoday at: ") + now_min);
