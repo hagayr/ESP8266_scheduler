@@ -34,7 +34,9 @@ The ESP8266_scheduler implements a scheduler that can be used to activate and de
           Open browser at http://192.168.4.1 and set your router SSID, Password and Blynk auth from there.
           After connecting to your router all settings are saved in EEPROM and will be used at next connection.
         ◦ User defined reset gpio can be used (press for 10 sec) to delete EEPROM and input new SSID, Password or Blynk auth 
-       
+    •
+
+
 The following Files are included:
     • passwd.h – includes user name and password for Over The Air firmware upload
     • DeviceDefines.h – includes all defines to be updated by user:
@@ -44,6 +46,8 @@ The following Files are included:
         ◦ SchedulerTaskInit Init function for tasks
     • AutoConn.h and AutoConn.ino -for the WifiManager Auto connect.
     • ESP8266_scheduler.ino – main Blynk code
+
+
 
 
 
