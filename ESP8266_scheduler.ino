@@ -84,25 +84,6 @@
 #include "passwd.h"
 #include "DeviceDefines.h"
 
-//////////////////////////////////////////////////////////////////////////////////
-// task activation fuction
-// this is an abstraction layer for activating task
-// curently only simple activation of gpio but user can change this
-//////////////////////////////////////////////////////////////////////////////////
-// This system uses gpio on of as tasks.
-// The number of used gpio per task is given by task_gpio_pins array
-//byte task_gpio_pins[] = {12 , 5 , 4 , 15}; // number of gpio to be used as task control
-//byte task_gpio_pins[] = {12}; // number of gpio to be used as task control
-
-
-void SchedulerTask_OnOff(bool task_state, char scheduler_num){
-  bool gpio_val = task_state^task_gpio_default[scheduler_num];
-  digitalWrite(task_gpio_pins[scheduler_num],gpio_val);
-}
-
-void SchedulerTaskInit(char scheduler_num){
-    pinMode(task_gpio_pins[scheduler_num], OUTPUT);  // set output pins
-}
 
 ////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////

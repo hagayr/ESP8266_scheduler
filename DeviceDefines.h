@@ -1,13 +1,13 @@
 
-// define fimware update server
-// firmware update done through "http://esp8266_dud.local/firmware"
-const char* host = "esp8266_dud"; 
-const char* update_path = "/firmware";
-
 //#define SONOFF_4CH_PRO
 #define ESP8285_NODEMCU
 //#define SONOFF_TH16
 //#define APTINEX_RP4CE8
+
+
+
+
+
 
 
 #ifdef SONOFF_4CH_PRO
@@ -96,3 +96,30 @@ const char* update_path = "/firmware";
  //  (used for gpio negative polarity)
  bool task_gpio_default[] = {LOW,LOW,LOW,LOW}; 
 #endif
+
+
+//////////////////////////////////////////////////////////////////////////////////
+// task activation fuction
+// this is an abstraction layer for activating task
+// curently only simple activation of gpio but user can change this
+//////////////////////////////////////////////////////////////////////////////////
+// This system uses gpio on of as tasks.
+// The number of used gpio per task is given by task_gpio_pins array
+//byte task_gpio_pins[] = {12 , 5 , 4 , 15}; // number of gpio to be used as task control
+//byte task_gpio_pins[] = {12}; // number of gpio to be used as task control
+
+
+void SchedulerTask_OnOff(bool task_state, char scheduler_num){
+  bool gpio_val = task_state^task_gpio_default[scheduler_num];
+  digitalWrite(task_gpio_pins[scheduler_num],gpio_val);
+}
+
+void SchedulerTaskInit(char scheduler_num){
+    pinMode(task_gpio_pins[scheduler_num], OUTPUT);  // set output pins
+}
+
+
+// define fimware update server
+// firmware update done through "http://esp8266_scheduler.local/firmware"
+const char* host = "esp8266_scheduler"; 
+const char* update_path = "/firmware";
