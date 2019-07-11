@@ -1,6 +1,7 @@
 ﻿# ESP8266_scheduler
 This is an Arduino project for the ESP8266 device family using the Blynk IoT Platform.
 The ESP8266_scheduler implements a scheduler that can be used to activate and deactivate hardware and software components at specific times given by the Blynk time input widget.
+
     • Parametric number of schedulers 
     • Each scheduler can be used to activate/de-activate different task
         ◦ Hardware tasks activate relays, motors, leds… using GPIOs
@@ -25,7 +26,7 @@ The ESP8266_scheduler implements a scheduler that can be used to activate and de
         ◦ when end of disable only new start times (or immediate activation) can activate tasks
         ◦ for example to disable boiler system when out for several days
     • Slider from Blynk app defines sleep/disable time with resolution of days
-    • Over The Air Firmware update (via http://esp8266_scheduler.local/firmware on local lan(
+    • Over The Air Firmware update (via http://esp8266_scheduler.local/firmware on local lan)
     • Automatic Connect (using tzapu WififManager)
         ◦ use arduino library manager or find it at http://tzapu.com/esp8266-wifi-connection-manager-library-arduino-ide/
         ◦ no need to hardcode the wifi ssid, password or the Blynk auth
@@ -43,3 +44,6 @@ The following Files are included:
         ◦ SchedulerTaskInit Init function for tasks
     • AutoConn.h and AutoConn.ino -for the WifiManager Auto connect.
     • ESP8266_scheduler.ino – main Blynk code
+
+
+
